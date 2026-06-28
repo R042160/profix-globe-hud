@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLOBAL INTELLIGENCE // ZURICH NODE</title>
+    <style>
+        :root {
+            --bg-color: #05060a;
+            --primary-cyan: #00F2FF;
+            --primary-gold: #FFD600;
+            --alert-red: #FF003C;
+            --font-mono: 'Courier New', Courier, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--primary-cyan);
+            font-family: var(--font-mono);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            transition: background-color 0.5s ease;
+        }
+
+        /* GLOBE CONTAINER */
+        #globe-viz {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: move;
+        }
+
+        /* HUD OVERLAY */
+        #hud-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            pointer-events: none; /* Let clicks pass through to globe */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2rem;
+            transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* MINIMAL STATE */
+        body.minimal #hud-layer {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+        }
+
+        /* HUD PANELS */
+        .hud-panel {
+            background: rgba(5, 6, 10, 0.75);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            padding: 1rem;
+            position: relative;
+            width: fit-content;
+            max-width: 300px;
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.1);
+        }
+
+        /* SCANNER CORNERS */
+        .hud-panel::before, .hud-panel::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-color: var(--primary-cyan);
+            border-style: solid;
+            transition: all 0.3s ease;
+        }
+
+        .hud-panel::before {
+            top: -1px; left: -1px;
+            border-width: 2px 0 0 2px;
+        }
+        .hud-panel::after {
+            bottom: -1px; right: -1px;
+            border-width: 0 2px 2px 0;
+        }
+
+        .hud-panel:hover {
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+        }
+
+        /* TYPOGRAPHY & DATA */
+        h1 {
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            margin-bottom: 0.5rem;
+            color: var(--primary-gold);
+            text-transform: uppercase;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            margin-bottom: 0.25rem;
+            letter-spacing: 1px;
+        }
+
+        .data-label { opacity: 0.7; }
+        .data-value { font-weight: bold; }
+
+        /* MARCHING ANTS VOLTAGE */
+        .voltage-container {
+            margin-top: 0.5rem;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .voltage-bar {
+            height: 100%;
+            width: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--primary-cyan),
+                var(--primary-cyan) 10px,
+                transparent 10px,
+                transparent 20px
+            );
+            background-size: 200% 100%;
+            animation: march 2s linear infinite;
+        }
+        @keyframes march {
+            0% { background-position: 100% 0; }
+            100% { background-position: 0 0; }
+        }
+
+        /* BLINKING CURSOR */
+        .blink { animation: blinker 1s step-end infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+
+        /* TOGGLE BUTTON */
+        #toggle-btn {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            z-index: 200;
+            background: rgba(5, 6, 10, 0.8);
+            border: 1px solid var(--primary-cyan);
+            color: var(--primary-cyan);
+            padding: 0.5rem 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+        #toggle-btn:hover {
+            background: var(--primary-cyan);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px var(--primary-cyan);
+        }
+
+        /* LAYOUT UTILS */
+        .top-left { position: absolute; top: 2rem; left: 2rem; }
+        .bottom-left { position: absolute; bottom: 2rem; left: 2rem; }
+        .bottom-right { position: absolute; bottom: 2rem; right: 2rem; text-align: right; }
+
+        /* LOADING OVERLAY */
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-color);
+            z-index: 999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            transition: opacity 0.8s ease;
+        }
+        .loader-text {
+            color: var(--primary-cyan);
+            letter-spacing: 4px;
+            font-size: 0.8rem;
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse { from { opacity: 0.5; } to { opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+    <!-- LOADING SCREEN -->
+    <div id="loader">
+        <div class="loader-text">INITIALIZING SYSTEM...</div>
+    </div>
+
+    <!-- 3D SCENE -->
+    <div id="globe-viz"></div>
+
+    <!-- UI TOGGLE -->
+    <button id="toggle-btn">[ TELEMETRY ]</button>
+
+    <!-- HUD INTERFACE -->
+    <div id="hud-layer">
+        
+        <!-- TOP LEFT: STATUS -->
+        <div class="hud-panel top-left">
+            <h1>System Status</h1>
+            <div class="data-row">
+                <span class="data-label">CORE</span>
+                <span class="data-value" style="color: var(--primary-cyan)">ONLINE</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">UPLINK</span>
+                <span class="data-value">SECURE<span class="blink">_</span></span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">POWER</span>
+                <span class="data-value" id="power-val">89%</span>
+            </div>
+        </div>
+
+        <!-- BOTTOM LEFT: VOLTAGE -->
+        <div class="hud-panel bottom-left">
+            <h1>Reactor Output</h1>
+            <div class="data-row">
+                <span class="data-label">VOLTAGE</span>
+                <span class="data-value" id="voltage-text">450.2 kV</span>
+            </div>
+            <div class="voltage-container">
+                <div class="voltage-bar" id="voltage-bar"></div>
+            </div>
+        </div>
+
+        <!-- BOTTOM RIGHT: TELEMETRY -->
+        <div class="hud-panel bottom-right">
+            <h1>Telemetry</h1>
+            <div class="data-row">
+                <span class="data-label">ROTATION</span>
+                <span class="data-value" id="speed-val">1,670 km/h</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">TEMP</span>
+                <span class="data-value" id="temp-val">14.2 °C</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">LATENCY</span>
+                <span class="data-value" id="ping-val">12 ms</span>
+            </div>
+            <div style="margin-top: 0.5rem; font-size: 0.6rem; color: var(--primary-gold);">
+                TARGET: ZÜRICH [47.37, 8.54]
+            </div>
+        </div>
+
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="https://unpkg.com/globe.gl"></script>
+    <script>
+        // --- CONFIGURATION ---
+        const CONFIG = {
+            colors: {
+                bg: '#05060a',
+                cyan: '#00F2FF',
+                gold: '#FFD600',
+                red: '#FF003C'
+            },
+            globe: {
+                autoRotateSpeed: 0.45,
+                atmColor: '#00F2FF',
+                atmAlt: 0.18
+            }
+        };
+
+        // --- DATA: CITIES ---
+        const cities = [
+            { name: "Zürich", lat: 47.37, lng: 8.54 },
+            { name: "London", lat: 51.50, lng: -0.12 },
+            { name: "New York", lat: 40.71, lng: -74.00 },
+            { name: "Tokyo", lat: 35.67, lng: 139.65 },
+            { name: "Singapore", lat: 1.35, lng: 103.81 },
+            { name: "Dubai", lat: 25.20, lng: 55.27 },
+            { name: "Sao Paulo", lat: -23.55, lng: -46.63 },
+            { name: "Frankfurt", lat: 50.11, lng: 8.68 },
+            { name: "Hong Kong", lat: 22.31, lng: 114.16 },
+            { name: "Sydney", lat: -33.86, lng: 151.20 },
+            { name: "Los Angeles", lat: 34.05, lng: -118.24 },
+            { name: "Cape Town", lat: -33.92, lng: 18.42 },
+            { name: "Moscow", lat: 55.75, lng: 37.61 },
+            { name: "Mumbai", lat: 19.07, lng: 72.87 }
+        ];
+
+        // --- DATA: ARCS (Connections) ---
+        // Generate arcs: Zürich connects to all, plus some random cross-connections
+        const arcs = [];
+        const zurich = cities.find(c => c.name === "Zürich");
+
+        // Hub connections (Zürich -> Others)
+        cities.forEach(city => {
+            if (city.name !== "Zürich") {
+                arcs.push({ start: zurich, end: city });
+            }
+        });
+
+        // Add some random cross-connections for visual density
+        const extraConnections = [
+            ["London", "New York"], ["Tokyo", "Singapore"], ["Dubai", "Mumbai"],
+            ["Sydney", "Tokyo"], ["Sao Paulo", "New York"], ["Hong Kong", "Singapore"]
+        ];
+        
+        extraConnections.forEach(pair => {
+            const startCity = cities.find(c => c.name === pair[0]);
+            const endCity = cities.find(c => c.name === pair[1]);
+            if (startCity && endCity) arcs.push({ start: startCity, end: endCity });
+        });
+
+        // --- INIT GLOBE ---
+        const world = document.getElementById('globe-viz');
+        const globe = Globe()(world)
+            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
+            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+            .backgroundColor(CONFIG.colors.bg)
+            .showAtmosphere(true)
+            .atmosphereColor(CONFIG.colors.cyan)
+            .atmosphereAltitude(CONFIG.globe.atmAlt)
+            .pointsData(cities)
+            .pointColor(d => d.name === 'Zürich' ? CONFIG.colors.gold : CONFIG.colors.cyan)
+            .pointAltitude(0.02)
+            .pointRadius(d => d.name === 'Zürich' ? 0.6 : 0.35)
+            .pointLabel(d => d.name)
+            .arcsData(arcs)
+            .arcStartLat(d => d.start.lat).arcStartLng(d => d.start.lng)
+            .arcEndLat(d => d.end.lat).arcEndLng(d => d.end.lng)
+            .arcColor(() => [CONFIG.colors.cyan, CONFIG.colors.gold])
+            .arcDashLength(0.4)
+            .arcDashGap(0.2)
+            .arcDashAnimateTime(2200)
+            .arcStroke(0.5)
+            .arcAltitude(0.25)
+            .ringsData([{ lat: 47.37, lng: 8.54 }])
+            .ringColor(() => CONFIG.colors.gold)
+            .ringMaxRadius(5)
+            .ringPropagationSpeed(2)
+            .ringRepeatPeriod(900);
+
+        // Controls
+        globe.controls().autoRotate = true;
+        globe.controls().autoRotateSpeed = CONFIG.globe.autoRotateSpeed;
+        globe.controls().enableZoom = true;
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            globe.width(window.innerWidth);
+            globe.height(window.innerHeight);
+        });
+
+        // Remove loader when ready
+        globe.onGlobeReady(() => {
+            const loader = document.getElementById('loader');
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 800);
+        });
+
+        // --- TELEMETRY SIMULATION ---
+        const TelemetryState = {
+            power: 89,
+            voltage: 450.0,
+            speed: 1670,
+            temp: 14.2,
+            ping: 12
+        };
+
+        const els = {
+            power: document.getElementById('power-val'),
+            voltageText: document.getElementById('voltage-text'),
+            voltageBar: document.getElementById('voltage-bar'),
+            speed: document.getElementById('speed-val'),
+            temp: document.getElementById('temp-val'),
+            ping: document.getElementById('ping-val')
+        };
+
+        function updateTelemetry() {
+            // Random fluctuations
+            if (Math.random() > 0.5) {
+                TelemetryState.power = Math.min(100, Math.max(85, TelemetryState.power + (Math.random() - 0.5)));
+                els.power.innerText = TelemetryState.power.toFixed(1) + '%';
+                
+                TelemetryState.voltage = Math.max(400, Math.min(480, TelemetryState.voltage + (Math.random() - 0.5) * 5));
+                els.voltageText.innerText = TelemetryState.voltage.toFixed(1) + ' kV';
+                
+                // Adjust bar speed based on voltage
+                const speed = 0.5 + ((TelemetryState.voltage - 400) / 80) * 1.5;
+                els.voltageBar.style.animationDuration = `${2.1 - speed}s`;
+            }
+
+            if (Math.random() > 0.7) {
+                TelemetryState.temp = Math.max(10, Math.min(20, TelemetryState.temp + (Math.random() - 0.5) * 0.1));
+                els.temp.innerText = TelemetryState.temp.toFixed(1) + ' °C';
+            }
+
+            if (Math.random() > 0.8) {
+                TelemetryState.ping = Math.floor(Math.random() * 20) + 5;
+                els.ping.innerText = TelemetryState.ping + ' ms';
+            }
+
+            requestAnimationFrame(updateTelemetry);
+        }
+
+        // Start simulation
+        requestAnimationFrame(updateTelemetry);
+
+        // --- UI INTERACTION ---
+        const toggleBtn = document.getElementById('toggle-btn');
+        const body = document.body;
+
+        toggleBtn.addEventListener('click', () => {
+            body.classList.toggle('minimal');
+            const isMinimal = body.classList.contains('minimal');
+            toggleBtn.innerText = isMinimal ? '[ SHOW HUD ]' : '[ TELEMETRY ]';
+        });
+
+    </script>
+
+<script id="globe-interact">
+(function(){
+    // ---------- CONFIG ----------
+    const CARD_WIDTH = 300;
+    const ANIMATION_DURATION = 1400; // globe fly-to duration
+    const SPRING_FACTOR = 0.08;
+    const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const PALETTE = {
+        bg: 'rgba(5,6,10,.55)',
+        cyan: '#00F2FF',
+        yellow: '#FFD600',
+        red: '#FF003C'
+    };
+    // ---------- STYLE ----------
+    const style = document.createElement('style');
+    style.textContent = `
+    .node-card{
+        position:fixed;
+        top:50%;
+        right:20px;
+        width:${CARD_WIDTH}px;
+        max-width:90vw;
+        padding:20px;
+        transform:translateY(-50%) translateX(40px);
+        opacity:0;
+        background:${PALETTE.bg};
+        backdrop-filter:blur(14px) saturate(1.2);
+        border:1px solid rgba(0,242,255,.4);
+        border-radius:14px;
+        color:#fff;
+        font-family:monospace;
+        z-index:1000;
+        transition:transform .6s cubic-bezier(0.34,1.56,0.64,1),opacity .6s cubic-bezier(0.34,1.56,0.64,1);
+        will-change:transform,opacity;
+        box-sizing:border-box;
+        overflow:hidden;
+    }
+    .node-card.show{
+        transform:translateY(-50%) translateX(0);
+        opacity:1;
+    }
+    .node-card h2{
+        margin:0 0 .8rem 0;
+        font-size:1.4rem;
+        color:${PALETTE.cyan};
+        text-align:center;
+    }
+    .node-card .metric{
+        display:flex;
+        justify-content:space-between;
+        margin:6px 0;
+        font-size:1rem;
+    }
+    .node-card .metric .label{
+        color:${PALETTE.cyan};
+    }
+    .node-card .metric .value{
+        color:${PALETTE.yellow};
+        min-width:60px;
+        text-align:right;
+    }
+    .node-card .corner{
+        position:absolute;
+        width:24px;
+        height:24px;
+        fill:${PALETTE.cyan};
+    }
+    .node-card .corner.tl{top:-12px;left:-12px;transform:rotate(0deg);}
+    .node-card .corner.tr{top:-12px;right:-12px;transform:rotate(90deg);}
+    .node-card .corner.bl{bottom:-12px;left:-12px;transform:rotate(270deg);}
+    .node-card .corner.br{bottom:-12px;right:-12px;transform:rotate(180deg);}
+    `;
+    document.head.appendChild(style);
+    // ---------- CARD ----------
+    const card = document.createElement('div');
+    card.className = 'node-card';
+    card.innerHTML = `
+        <svg class="corner tl" viewBox="0 0 24 24"><path d="M0 0 L12 0 L0 12 Z"/></svg>
+        <svg class="corner tr" viewBox="0 0 24 24"><path d="M0 0 L12 0 L0 12 Z"/></svg>
+        <svg class="corner bl" viewBox="0 0 24 24"><path d="M0 0 L12 0 L0 12 Z"/></svg>
+        <svg class="corner br" viewBox="0 0 24 24"><path d="M0 0 L12 0 L0 12 Z"/></svg>
+        <h2 class="city-name"></h2>
+        <div class="metric"><span class="label">Confianza</span><span class="value" data-target="0"></span></div>
+        <div class="metric"><span class="label">Transacciones</span><span class="value" data-target="0"></span></div>
+        <div class="metric"><span class="label">Reputación</span><span class="value" data-target="0"></span></div>
+    `;
+    document.body.appendChild(card);
+    // ---------- UTILITIES ----------
+    function hashString(str){
+        let h=0;
+        for(let i=0;i<str.length;i++){
+            h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+        }
+        return h>>>0; // unsigned
+    }
+    function deterministicMetrics(name){
+        const h = hashString(name);
+        const confidence = 94 + (h % 6); // 94‑99
+        const transactions = 1e6 + (h % 4000000); // 1M‑5M
+        const reputation = h % 101; // 0‑100
+        return {confidence, transactions, reputation};
+    }
+    function formatNumber(val){
+        if(val >= 1e6) return (val/1e6).toFixed(1)+'M';
+        if(val >= 1e3) return (val/1e3).toFixed(0)+'k';
+        return val.toString();
+    }
+    // ---------- ANIMATION ----------
+    function animateValue(el, target){
+        const isPercent = el.dataset.isPercent;
+        let current = 0;
+        function step(){
+            current += (target - current) * SPRING_FACTOR;
+            if(Math.abs(target - current) < 0.1){
+                current = target;
+                el.textContent = isPercent ? `${Math.round(current)}%` : formatNumber(Math.round(current));
+                return;
+            }
+            el.textContent = isPercent ? `${Math.round(current)}%` : formatNumber(Math.round(current));
+            requestAnimationFrame(step);
+        }
+        if(REDUCED_MOTION){
+            el.textContent = isPercent ? `${Math.round(target)}%` : formatNumber(Math.round(target));
+        }else{
+            requestAnimationFrame(step);
+        }
+    }
+    // ---------- CARD LOGIC ----------
+    let cardVisible = false;
+    function showCard(city){
+        const nameEl = card.querySelector('.city-name');
+        const metricEls = card.querySelectorAll('.metric .value');
+        nameEl.textContent = city.name;
+        const metrics = deterministicMetrics(city.name);
+        // confidence
+        metricEls[0].dataset.isPercent = 'true';
+        metricEls[0].dataset.target = metrics.confidence;
+        // transactions
+        metricEls[1].dataset.isPercent = '';
+        metricEls[1].dataset.target = metrics.transactions;
+        // reputation
+        metricEls[2].dataset.isPercent = 'true';
+        metricEls[2].dataset.target = metrics.reputation;
+        // start animations
+        animateValue(metricEls[0], metrics.confidence);
+        animateValue(metricEls[1], metrics.transactions);
+        animateValue(metricEls[2], metrics.reputation);
+        // show card
+        card.classList.add('show');
+        cardVisible = true;
+        // stop globe auto‑rotate
+        if(globe && globe.controls) globe.controls().autoRotate = false;
+    }
+    function hideCard(){
+        card.classList.remove('show');
+        cardVisible = false;
+        // resume auto‑rotate after transition
+        setTimeout(()=>{
+            if(globe && globe.controls) globe.controls().autoRotate = true;
+        },600);
+    }
+    // ---------- EVENT HANDLERS ----------
+    function onGlobeClick(point){
+        // Find city by exact lat/lng (tolerance)
+        const tolerance = 0.0001;
+        const city = cities.find(c=>Math.abs(c.lat-point.lat)<tolerance && Math.abs(c.lng-point.lng)<tolerance);
+        if(!city) return;
+        // Fly to city
+        if(globe && globe.pointOfView){
+            globe.pointOfView({lat:point.lat,lng:point.lng,altitude:1.6}, ANIMATION_DURATION);
+        }
+        // After fly‑to, show card
+        setTimeout(()=>showCard(city), ANIMATION_DURATION);
+    }
+    function onDocumentClick(e){
+        if(cardVisible && !card.contains(e.target)){
+            hideCard();
+        }
+    }
+    // ---------- ENABLE ----------
+    function enable(){
+        if(!globe || !globe.onPointClick) return;
+        globe.onPointClick(onGlobeClick);
+        document.addEventListener('click', onDocumentClick);
+    }
+    // ---------- EXPOSE ----------
+    window.ProFixGlobeInteract = { enable };
+})();
+</script>
+</body>
+</html>
