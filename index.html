@@ -622,5 +622,232 @@
     window.ProFixGlobeInteract = { enable };
 })();
 </script>
+
+    <script>
+/* === ProFix Telemetry Adaptativo (Cerebras gpt-oss-120b, IA gratis) === */
+(function(){
+  let titleElem; // hoisted al top del IIFE (fix TDZ: se usa en applyRole antes de su decl original)
+  // ---------- Config ----------
+  const ROLE_ALIASES = {operator:'profix', promoter:'procitizen', investor:'prolux'};
+  const ROLE_CONFIGS = {
+    profix:{
+      title:"OPERATOR CONSOLE",
+      star:{label:"FIX EFFICIENCY", sub:"Tareas cerradas / Tiempo"},
+      color:"#00F2FF",
+      wave:"pulsos de cierre rápido (picos agudos)",
+      tiers:["ARCHITECT OF REALITY","REALITY WARPER","SYSTEM FORGER"]
+    },
+    procitizen:{
+      title:"NETWORK CONSOLE",
+      star:{label:"NETWORK WEIGHT", sub:"Verificaciones / Transacciones"},
+      color:"#FFD600",
+      wave:"onda estable de confianza (sinusoide suave)",
+      tiers:["TRUSTED NODE","NETWORK PILLAR","TRUST SOVEREIGN"]
+    },
+    provision:{
+      title:"FORESIGHT CONSOLE",
+      star:{label:"FUTURE YIELD", sub:"Gradiente de liquidez predicho"},
+      color:"#00FF94",
+      wave:"gradiente ascendente con tendencia (rampa+ruido)",
+      tiers:["SIGNAL READER","MARKET ORACLE","FUTURE WARDEN"]
+    },
+    prolux:{
+      title:"GOVERNANCE CONSOLE",
+      star:{label:"TOTAL SYSTEM VALUE", sub:"Impacto humano × Capital"},
+      color:"#FF003C",
+      wave:"amplitud amplia de capital (onda de gran amplitud)",
+      tiers:["CAPITAL ARCHITECT","SYSTEM SOVEREIGN","REALITY OWNER"]
+    }
+  };
+  const BASE_PALETTE = '#05060a';
+  const FONT_FAMILY = '"SF Mono","Source Code Pro",monospace';
+  const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- Helpers ----------
+  const qs = (s,root=document)=>root.querySelector(s);
+  const qsa = (s,root=document)=>Array.from(root.querySelectorAll(s));
+  const getUrlParam = (p)=>new URLSearchParams(location.search).get(p);
+  const hashString = str=>{let h=5381;for(let i=0;i<str.length;i++)h=((h<<5)+h)^str.charCodeAt(i);return h>>>0;};
+  const seededRandom = (seed)=>{let x=seed;return()=>{x = (x*1664525+1013904223)>>>0; return (x>>>0)/4294967296;};};
+
+  // ---------- State ----------
+  let currentRole = 'profix';
+  let activityCount = 0;
+  let tierIdx = 0;
+  let starTarget = 0;
+  let starCurrent = 0;
+
+  // ---------- Init ----------
+  /* init movido al final del IIFE (tras todas las decl let/const → sin TDZ) */
+
+  // ---------- Role ----------
+  function setRole(r){
+    if(!ROLE_CONFIGS[r]) r='profix';
+    currentRole = r;
+    const cfg = ROLE_CONFIGS[r];
+    document.documentElement.style.setProperty('--role-color', cfg.color);
+    // update star target
+    starTarget = 60 + (hashString(r)%40); // 60-99
+    // update title
+    titleElem.textContent = `[TIER 1: ${cfg.tiers[0]}]`;
+    tierIdx = 0;
+    // update selector active state
+    qsa('.role-chip').forEach(ch=>ch.classList.toggle('active', ch.dataset.role===r));
+  }
+  function getRole(){ return currentRole; }
+
+  // ---------- Style ----------
+  function injectStyle(){
+    const style = document.createElement('style');
+    style.textContent = `
+:root{--role-color:${ROLE_CONFIGS[currentRole].color};--base-bg:${BASE_PALETTE};}
+body{background:#05060a;font-family:${FONT_FAMILY};color:#fff;overflow:hidden;}
+.hud-panel{border:2px solid var(--role-color);box-shadow:0 0 12px var(--role-color);transition:border-color .8s ease,box-shadow .8s ease,color .8s ease;}
+${REDUCED_MOTION?'.hud-panel{transition:none;}' : ''}
+.oscilloscope{position:fixed;right:20px;bottom:20px;width:260px;height:90px;background:rgba(5,6,10,.55);backdrop-filter:blur(14px);border:2px solid var(--role-color);border-radius:8px;overflow:hidden;z-index:1000;}
+.star-panel{position:fixed;right:20px;top:20px;width:200px;background:rgba(5,6,10,.55);backdrop-filter:blur(12px);border:2px solid var(--role-color);border-radius:8px;padding:12px;box-sizing:border-box;color:#fff;font-size:14px;z-index:1000;}
+.star-value{font-size:36px;font-weight:bold;color:var(--role-color);transition:color .4s;}
+.title-overlay{position:fixed;top:20px;left:50%;transform:translateX(-50%);font-size:18px;color:var(--role-color);text-shadow:0 0 6px var(--role-color);z-index:1000;pointer-events:none;}
+.role-selector{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:1000;}
+.role-chip{padding:6px 12px;background:rgba(255,255,255,.1);border:1px solid var(--role-color);border-radius:4px;color:#fff;cursor:pointer;transition:background .4s;color:var(--role-color);}
+.role-chip.active{background:var(--role-color);color:#000;}
+`;
+    document.head.appendChild(style);
+  }
+
+  // ---------- Oscilloscope ----------
+  let canvas, ctx, oscStartTime;
+  function createOscilloscope(){
+    canvas = document.createElement('canvas');
+    canvas.className='oscilloscope';
+    canvas.width=260; canvas.height=90;
+    document.body.appendChild(canvas);
+    ctx = canvas.getContext('2d');
+    oscStartTime = performance.now();
+  }
+  function drawOscilloscope(ts){
+    const cfg = ROLE_CONFIGS[currentRole];
+    const w = canvas.width, h = canvas.height;
+    const t = (ts-oscStartTime)/1000;
+    ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--role-color').trim();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const seed = hashString(cfg.wave);
+    const rand = seededRandom(seed);
+    for(let x=0;x<w;x++){
+      const phase = x/w * Math.PI * 2;
+      let y = h/2;
+      // define wave composition per role
+      if(currentRole==='profix'){
+        y += Math.sin(phase*4 + t*3)*10;
+        y += Math.sin(phase*7 + t*5)*5;
+      }else if(currentRole==='procitizen'){
+        y += Math.sin(phase*2 + t*2)*12;
+      }else if(currentRole==='provision'){
+        y += (x/w)*20 + Math.sin(phase*3 + t*4)*8;
+      }else if(currentRole==='prolux'){
+        y += Math.sin(phase*1.5 + t*1.5)*18;
+        y += Math.sin(phase*5 + t*3)*6;
+      }
+      // add tiny deterministic noise
+      y += (rand()-0.5)*2;
+      if(x===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  // ---------- Star Panel ----------
+  let starElem, starValueElem;
+  function createStarPanel(){
+    const panel = document.createElement('div');
+    panel.className='star-panel';
+    panel.innerHTML = `<div class="star-label"></div><div class="star-value">0%</div><div class="star-sub"></div>`;
+    document.body.appendChild(panel);
+    starElem = panel;
+    starValueElem = qs('.star-value',panel);
+    updateStarContent();
+  }
+  function updateStarContent(){
+    const cfg = ROLE_CONFIGS[currentRole];
+    qs('.star-label',starElem).textContent = cfg.star.label;
+    qs('.star-sub',starElem).textContent = cfg.star.sub;
+  }
+  function animateStar(){
+    if(REDUCED_MOTION){ starCurrent = starTarget; }
+    else{
+      starCurrent += (starTarget-starCurrent)*0.08;
+    }
+    starValueElem.textContent = Math.round(starCurrent)+'%';
+  }
+
+  // ---------- Title Overlay ----------
+  /* titleElem hoisted al top del IIFE (fix TDZ) */
+  function createTitleOverlay(){
+    const div = document.createElement('div');
+    div.className='title-overlay';
+    document.body.appendChild(div);
+    titleElem = div;
+  }
+  function updateTitleTier(){
+    const cfg = ROLE_CONFIGS[currentRole];
+    const tier = cfg.tiers[tierIdx]||cfg.tiers[cfg.tiers.length-1];
+    titleElem.textContent = `[TIER ${tierIdx+1}: ${tier}]`;
+    titleElem.style.transition = REDUCED_MOTION?'none':'transform .6s cubic-bezier(0.34,1.56,0.64,1), opacity .6s';
+    titleElem.style.transform='translateY(-12px)';
+    titleElem.style.opacity='0';
+    requestAnimationFrame(()=>{titleElem.style.transform='translateY(0)';titleElem.style.opacity='1';});
+  }
+
+  // ---------- Role Selector ----------
+  function createRoleSelector(){
+    const container = document.createElement('div');
+    container.className='role-selector';
+    document.body.appendChild(container);
+    Object.keys(ROLE_CONFIGS).forEach(r=>{
+      const chip = document.createElement('div');
+      chip.className='role-chip';
+      chip.dataset.role=r;
+      chip.textContent=r.toUpperCase();
+      chip.addEventListener('click',()=>setRole(r));
+      container.appendChild(chip);
+    });
+  }
+
+  // ---------- Global Click ----------
+  function attachGlobalClick(){
+    document.addEventListener('click',()=>{ activityCount++; if(activityCount%5===0 && tierIdx<2){ tierIdx++; updateTitleTier(); } }, {capture:true, passive:true});
+  }
+
+  // ---------- Main Loop ----------
+  function startAnimationLoops(){
+    function loop(ts){
+      drawOscilloscope(ts);
+      animateStar();
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- Init (al final: todas las decl ya evaluadas) ----------
+  (function init(){
+    const param = getUrlParam('role')||'profix';
+    const role = ROLE_ALIASES[param]||param;
+    injectStyle();
+    createOscilloscope();
+    createStarPanel();
+    createTitleOverlay();
+    createRoleSelector();
+    attachGlobalClick();
+    setRole(role);            // tras crear todo el DOM (titleElem + chips ya existen)
+    startAnimationLoops();
+  })();
+
+  // ---------- Expose ----------
+  window.ProFixTelemetry = {setRole, getRole};
+})();
+
+    </script>
 </body>
 </html>
