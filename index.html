@@ -1571,5 +1571,205 @@ ${REDUCED_MOTION?'.hud-panel{transition:none;}' : ''}
 })();
 
     </script>
+    <script>
+/* === ELITE LAYER: 70-tactical-panels.js (Cerebras gpt-oss-120b · IA gratis) === */
+(function(){
+var styleEl, panels, createPanel, createScanCorners, animateScanCorners, updateOscilloscope, jitterValues, targetValues, startValues, lastUpdate, updateNumbers, lerp, getRoleColor, prefersReducedMotion, requestAnimFrame, cancelAnimFrame, applyState, init;
+requestAnimFrame = window.requestAnimationFrame.bind(window);
+cancelAnimFrame = window.cancelAnimationFrame.bind(window);
+lerp = function(a,b,t){return a + (b - a) * t;};
+getRoleColor = function(){
+    var root = document.documentElement,
+        style = getComputedStyle(root),
+        val = style.getPropertyValue('--role-color').trim();
+    return val || '#00F2FF';
+};
+styleEl = document.createElement('style');
+styleEl.textContent = [
+    '.hud-panel:not(.tac-panel){display:none!important}',
+    '.star-panel{display:none!important}',
+    '.hud-panel.tac-panel{position:fixed;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:8px 12px;box-sizing:border-box;background:rgba(5,6,10,.55);backdrop-filter:blur(12px);border:1px solid var(--role-color);font-family:monospace;color:#fff;pointer-events:none;z-index:1000;overflow:hidden}',
+    '.hud-panel.tac-panel .title{font-size:0.75rem;color:var(--role-color);margin-bottom:2px}',
+    '.hud-panel.tac-panel .value{font-size:1.5rem;line-height:1}',
+    '.hud-panel.tac-panel svg.scan-corners{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}',
+    '.hud-panel.tac-panel svg.oscilloscope{position:absolute;bottom:0;left:0;width:100%;height:30%;pointer-events:none}'
+].join('\n');
+document.head.appendChild(styleEl);
+panels = [
+    {pos:'top-left',name:'SPEED',unit:'km/h'},
+    {pos:'top-right',name:'POWER',unit:'%'},
+    {pos:'bottom-left',name:'PRESSURE',unit:'kPa'},
+    {pos:'bottom-right',name:'VOLTAGE',unit:'kV',osc:true}
+];
+createPanel = function(def){
+    var panel = document.createElement('div'),
+        title = document.createElement('div'),
+        value = document.createElement('div'),
+        posStyle = {
+            'top-left':'top:8px;left:8px;',
+            'top-right':'top:8px;right:8px;',
+            'bottom-left':'bottom:8px;left:8px;',
+            'bottom-right':'bottom:8px;right:8px;'
+        }[def.pos]||'';
+    panel.className = 'hud-panel tac-panel';
+    panel.setAttribute('style',posStyle);
+    title.className = 'title';
+    title.textContent = def.name;
+    value.className = 'value';
+    value.textContent = '--';
+    panel.appendChild(title);
+    panel.appendChild(value);
+    if(def.osc){
+        var oscSvg = document.createElementNS('http://www.w3.org/2000/svg','svg'),
+            path = document.createElementNS('http://www.w3.org/2000/svg','path');
+        oscSvg.classList.add('oscilloscope');
+        path.setAttribute('fill','none');
+        oscSvg.appendChild(path);
+        panel.appendChild(oscSvg);
+        def.oscSvg = oscSvg;
+        def.oscPath = path;
+    }
+    var scanSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    scanSvg.classList.add('scan-corners');
+    scanSvg.setAttribute('stroke',getRoleColor());
+    scanSvg.setAttribute('stroke-width','2');
+    scanSvg.setAttribute('fill','none');
+    var paths = [];
+    for(var i=0;i<4;i++){
+        var p = document.createElementNS('http://www.w3.org/2000/svg','path');
+        p.dataset.corner=i;
+        scanSvg.appendChild(p);
+        paths.push(p);
+    }
+    panel.appendChild(scanSvg);
+    def.scanSvg = scanSvg;
+    def.scanPaths = paths;
+    document.body.appendChild(panel);
+    def.element = panel;
+    def.valueEl = value;
+    return panel;
+};
+createScanCorners = function(def){
+    var rect = def.element.getBoundingClientRect(),
+        w = rect.width,
+        h = rect.height,
+        size = Math.min(w,h)*0.2,
+        d = '';
+    d = 'M0,0 L'+size+',0 L'+size+','+size;
+    def.scanPaths[0].setAttribute('d',d);
+    d = 'M'+w+',0 L'+(w-size)+',0 L'+(w-size)+','+size;
+    def.scanPaths[1].setAttribute('d',d);
+    d = 'M0,'+h+' L'+size+','+h+' L'+size+','+(h-size);
+    def.scanPaths[2].setAttribute('d',d);
+    d = 'M'+w+','+h+' L'+(w-size)+','+h+' L'+(w-size)+','+(h-size);
+    def.scanPaths[3].setAttribute('d',d);
+};
+animateScanCorners = function(def){
+    var duration = prefersReducedMotion?0:600,
+        start = null,
+        paths = def.scanPaths,
+        lengths = [];
+    for(var i=0;i<paths.length;i++){
+        var len = paths[i].getTotalLength();
+        lengths[i]=len;
+        paths[i].style.strokeDasharray=len;
+        paths[i].style.strokeDashoffset=len;
+    }
+    var drawStep=function(ts){
+        if(!start) start=ts;
+        var elapsed = ts-start;
+        for(var i=0;i<paths.length;i++){
+            var delay = i*60;
+            var localT = Math.max(0,Math.min((elapsed-delay)/duration,1));
+            paths[i].style.strokeDashoffset=lerp(lengths[i],0,localT);
+            paths[i].style.opacity=''+(0.7+0.3*Math.sin(ts/500));
+        }
+        if(elapsed<duration+paths.length*60){
+            requestAnimFrame(drawStep);
+        }else{
+            var pulse=function(){
+                for(var i=0;i<paths.length;i++){
+                    paths[i].style.opacity=''+(0.7+0.3*Math.abs(Math.sin(Date.now()/800)));
+                }
+                requestAnimFrame(pulse);
+            };
+            requestAnimFrame(pulse);
+        }
+    };
+    requestAnimFrame(drawStep);
+};
+var oscData = {phase:0,amplitude:10,frequency:0.02};
+updateOscilloscope = function(def){
+    var svg = def.oscSvg,
+        path = def.oscPath,
+        w = svg.clientWidth||svg.getBoundingClientRect().width,
+        h = svg.clientHeight||svg.getBoundingClientRect().height,
+        pts = 40,
+        d = 'M0 '+h/2;
+    for(var i=0;i<=pts;i++){
+        var x = (i/pts)*w,
+            y = h/2 + Math.sin(i*oscData.frequency+oscData.phase)*oscData.amplitude;
+        d += ' L'+x+' '+y;
+    }
+    path.setAttribute('d',d);
+    path.setAttribute('stroke',getRoleColor());
+    oscData.phase+=0.03;
+};
+jitterValues = {};
+targetValues = {};
+startValues = {};
+lastUpdate = 0;
+updateNumbers = function(def){
+    var now = performance.now();
+    if(now-(def.lastUpdate||0)<83){requestAnimFrame(function(){updateNumbers(def);});return;}
+    def.lastUpdate = now;   // throttle POR PANEL (antes global compartido -> 2 paneles quedaban en '--')
+    if(targetValues[def.name]===undefined){
+        targetValues[def.name]=Math.random()*100;
+        startValues[def.name]=0;
+    }
+    var hash = def.name.split('').reduce(function(a,c){return a + c.charCodeAt(0);},0);
+    var jitter = Math.sin(now/1000 + hash)*0.5;
+    var lerped = lerp(startValues[def.name],targetValues[def.name],Math.min((now%3000)/3000,1));
+    var display = (lerped + jitter*(targetValues[def.name]*0.02)).toFixed(1);
+    def.valueEl.textContent = display + ' ' + def.unit;
+    requestAnimFrame(function(){updateNumbers(def);});
+};
+applyState = function(){
+    var state = window.PFXState.get(),
+        color = getRoleColor(),
+        seek = state.seek;
+    if(seek==='liquidity'){oscData.amplitude=8;oscData.frequency=0.04;}
+    else if(seek==='capital'){oscData.amplitude=12;oscData.frequency=0.03;}
+    else{oscData.amplitude=6;oscData.frequency=0.02;}
+    panels.forEach(function(def){
+        if(def.scanSvg){def.scanSvg.setAttribute('stroke',color);}
+        if(def.oscPath){def.oscPath.setAttribute('stroke',color);}
+    });
+};
+init = function(){
+    if(!window.PFXState||!window.PFXState.get){requestAnimFrame(init);return;}
+    prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    panels.forEach(function(def){createPanel(def);});
+    panels.forEach(function(def){
+        createScanCorners(def);
+        if(!prefersReducedMotion){animateScanCorners(def);}
+        if(def.osc){
+            var loop=function(){updateOscilloscope(def);requestAnimFrame(loop);};
+            loop();
+        }
+        updateNumbers(def);
+    });
+    window.PFXState.subscribe(applyState);
+    applyState();
+    window.PFXTactical = {panels:panels};
+};
+if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',init);
+}else{
+    init();
+}
+})();
+
+    </script>
 </body>
 </html>
