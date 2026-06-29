@@ -328,7 +328,7 @@
 
         // --- INIT GLOBE ---
         const world = document.getElementById('globe-viz');
-        const globe = Globe()(world)
+        const globe = window.globe = Globe()(world)
             .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
             .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
             .backgroundColor(CONFIG.colors.bg)
@@ -846,6 +846,728 @@ ${REDUCED_MOTION?'.hud-panel{transition:none;}' : ''}
 
   // ---------- Expose ----------
   window.ProFixTelemetry = {setRole, getRole};
+})();
+
+    </script>
+
+    <script>
+/* === ELITE LAYER: 00-url-state.js (Cerebras gpt-oss-120b · IA gratis) === */
+(function(){
+    //--- variables ---
+    var roleAliases = {operator:'profix', promoter:'procitizen', investor:'prolux'};
+    var defaultState = {role:'profix', seek:'liquidity', bias:'explore'};
+    var state = {};
+    var subscribers = [];
+
+    //--- helpers ---
+    function getUrlParam(name){ return new URLSearchParams(window.location.search).get(name); }
+    function parseUrl(){
+        var role = getUrlParam('role') || defaultState.role;
+        var seek = getUrlParam('seek') || defaultState.seek;
+        var bias = getUrlParam('bias') || defaultState.bias;
+
+        if (roleAliases.hasOwnProperty(role)) {
+            role = roleAliases[role];
+        }
+        return {role:role, seek:seek, bias:bias};
+    }
+
+    function buildQuery(){
+        var qp = new URLSearchParams();
+        if (state.role) qp.set('role', state.role);
+        if (state.seek) qp.set('seek', state.seek);
+        if (state.bias) qp.set('bias', state.bias);
+        return qp.toString();
+    }
+
+    function updateUrl(){
+        var query = buildQuery();
+        var newUrl = window.location.pathname + (query ? '?' + query : '');
+        window.history.replaceState(null, '', newUrl);
+    }
+
+    function emit(){
+        var event = new CustomEvent('pfx:state', {detail:Object.freeze(Object.assign({}, state))});
+        window.dispatchEvent(event);
+    }
+
+    //--- API ---
+    function get(){
+        return Object.assign({}, state);
+    }
+
+    function set(patch){
+        if (!patch || typeof patch !== 'object') return;
+        var changed = false;
+        for (var key in patch){
+            if (patch.hasOwnProperty(key) && defaultState.hasOwnProperty(key)){
+                if (state[key] !== patch[key]){
+                    state[key] = patch[key];
+                    changed = true;
+                }
+            }
+        }
+        if (changed){
+            updateUrl();
+            emit();
+            subscribers.slice().forEach(function(fn){ fn(get()); });
+        }
+    }
+
+    function subscribe(fn){
+        if (typeof fn !== 'function') return function(){};
+        subscribers.push(fn);
+        fn(get());
+        return function(){
+            var idx = subscribers.indexOf(fn);
+            if (idx !== -1) subscribers.splice(idx,1);
+        };
+    }
+
+    //--- event listeners ---
+    function onPopState(){
+        var urlState = parseUrl();
+        var changed = false;
+        for (var k in urlState){
+            if (urlState.hasOwnProperty(k) && state[k] !== urlState[k]){
+                state[k] = urlState[k];
+                changed = true;
+            }
+        }
+        if (changed){
+            emit();
+            subscribers.slice().forEach(function(fn){ fn(get()); });
+        }
+    }
+
+    //--- init helpers ---
+    function waitForGlobe(cb){
+        if (window.globe && typeof window.globe.getScreenCoords === 'function'){
+            cb();
+        }else{
+            requestAnimationFrame(function(){ waitForGlobe(cb); });
+        }
+    }
+
+    function initCore(){
+        state = parseUrl();
+        window.PFXState = {
+            get: get,
+            set: set,
+            subscribe: subscribe
+        };
+        emit();
+        window.addEventListener('popstate', onPopState);
+    }
+
+    function init(){
+        initCore();   // PFXState NO depende del globo: exponer inmediato (zero-entropy base)
+    }
+
+    //--- style injection ---
+    var style = document.createElement('style');
+    style.textContent = "\n" +
+        ".pfx-state{pointer-events:none;}\n" +
+        "@media (prefers-reduced-motion: reduce){\n" +
+        "  .pfx-state{transition:none !important;}\n" +
+        "}\n";
+    document.head.appendChild(style);
+
+    //--- start ---
+    if (document.readyState === 'loading'){
+        document.addEventListener('DOMContentLoaded', init);
+    }else{
+        init();
+    }
+})();
+
+    </script>
+    <script>
+/* === ELITE LAYER: 10-holo-glow.js (Cerebras gpt-oss-120b · IA gratis) === */
+(function(){
+    // Declarations
+    let styleEl;
+    let overlayEl;
+    const HUD_SELECTOR = '.hud-panel';
+    const ROLE_COLOR_VAR = '--role-color';
+    const CHROMA_RED = '#FF0040';
+    const CHROMA_CYAN = '#00F2FF';
+    const GLITCH_ANIMATION = 'glowPulse';
+    const SCANLINE_BG = 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 2px)';
+    const VIGNETTE_BG = 'radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.5) 80%)';
+    const SHIMMER_KEYFRAMES = '@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}';
+    
+    // Utility to create and inject style
+    function createStyle(){
+        const css = `
+            ${HUD_SELECTOR}{
+                position:relative;
+                box-shadow:0 0 8px var(${ROLE_COLOR_VAR});
+                animation:${GLITCH_ANIMATION} 2s ease-in-out infinite alternate;
+            }
+            ${HUD_SELECTOR}::before,
+            ${HUD_SELECTOR}::after{
+                content:"";
+                position:absolute;
+                inset:0;
+                pointer-events:none;
+                border:2px solid transparent;
+                mix-blend-mode:screen;
+                border-radius:inherit;
+            }
+            ${HUD_SELECTOR}::before{
+                box-shadow:0 0 0 2px ${CHROMA_RED};
+                transform:translate(-1.5px,0);
+            }
+            ${HUD_SELECTOR}::after{
+                box-shadow:0 0 0 2px ${CHROMA_CYAN};
+                transform:translate(1.5px,0);
+            }
+            @keyframes ${GLITCH_ANIMATION}{
+                0%{box-shadow:0 0 6px var(${ROLE_COLOR_VAR})}
+                100%{box-shadow:0 0 12px var(${ROLE_COLOR_VAR})}
+            }
+            @media (prefers-reduced-motion: reduce){
+                ${HUD_SELECTOR}{
+                    animation:none;
+                }
+            }
+            .profix-overlay{
+                position:fixed;
+                inset:0;
+                pointer-events:none;
+                z-index:9999;
+                background:${SCANLINE_BG},${VIGNETTE_BG};
+                overflow:hidden;
+            }
+            .profix-overlay::before{
+                content:"";
+                position:absolute;
+                inset:0;
+                background:linear-gradient(90deg, rgba(0,255,255,0.08) 0%, rgba(255,0,64,0.08) 50%, rgba(0,255,255,0.08) 100%);
+                opacity:0.1;
+                mix-blend-mode:screen;
+                animation:shimmer 6s linear infinite;
+            }
+            @media (prefers-reduced-motion: reduce){
+                .profix-overlay::before{
+                    animation:none;
+                }
+            }
+            ${SHIMMER_KEYFRAMES}
+            @keyframes shimmer{
+                0%{background-position:-200% 0}
+                100%{background-position:200% 0}
+            }
+        `;
+        styleEl = document.createElement('style');
+        styleEl.type = 'text/css';
+        styleEl.appendChild(document.createTextNode(css));
+        document.head.appendChild(styleEl);
+    }
+
+    // Overlay creation
+    function createOverlay(){
+        overlayEl = document.createElement('div');
+        overlayEl.className = 'profix-overlay';
+        document.body.appendChild(overlayEl);
+    }
+
+    // Refresh styles on role change
+    function refreshStyles(){
+        if(!styleEl || !overlayEl) return;
+        // Re‑inject CSS to ensure var(--role-color) updates (browser recomputes)
+        const parent = styleEl.parentNode;
+        if(parent){
+            const newStyle = styleEl.cloneNode(false);
+            newStyle.textContent = styleEl.textContent;
+            parent.replaceChild(newStyle, styleEl);
+            styleEl = newStyle;
+        }
+    }
+
+    // Guarded init after DOM and globe ready
+    function waitForReady(){
+        if(document.readyState !== 'complete'){
+            document.addEventListener('DOMContentLoaded', waitForReady);
+            return;
+        }
+        if(!window.globe || typeof globe.getScreenCoords !== 'function'){
+            requestAnimationFrame(waitForReady);
+            return;
+        }
+        // All prerequisites met
+        createStyle();
+        createOverlay();
+        // Subscribe to custom state changes
+        window.addEventListener('pfx:state', refreshStyles);
+    }
+
+    // Kick‑off
+    (function init(){
+        waitForReady();
+    })();
+})();
+
+    </script>
+    <script>
+/* === ELITE LAYER: 20-line-tracing.js (Cerebras gpt-oss-120b · IA gratis) === */
+(function(){
+    // VARIABLES DECLARATION
+    var canvas;
+    var ctx;
+    var dpr;
+    var panels;
+    var hoveredPanel;
+    var roleColor;
+    var animationId;
+    var baseRadius;
+    var pulsateAmp;
+    var pulsateFreq;
+    var prefersReduced;
+    var resizeObserver;
+    
+    // INITIALISATION FUNCTION
+    function init(){
+        // Wait for DOM ready
+        if (document.readyState !== 'complete' && document.readyState !== 'interactive'){
+            document.addEventListener('DOMContentLoaded',init);
+            return;
+        }
+        // Ensure globe API is available
+        function checkGlobe(){
+            if (window.globe && typeof globe.getScreenCoords === 'function'){
+                setupCanvas();
+                setupPanels();
+                setupResize();
+                startLoop();
+            }else{
+                requestAnimationFrame(checkGlobe);
+            }
+        }
+        checkGlobe();
+    }
+    
+    // CREATE CANVAS AND STYLE
+    function setupCanvas(){
+        dpr = window.devicePixelRatio || 1;
+        canvas = document.createElement('canvas');
+        canvas.className = 'line-trace-canvas';
+        canvas.style.position = 'fixed';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.pointerEvents = 'none';
+        canvas.style.zIndex = '5';
+        document.body.appendChild(canvas);
+        ctx = canvas.getContext('2d');
+        baseRadius = 4 * dpr;
+        pulsateAmp = 2 * dpr;
+        pulsateFreq = 0.004; // radians per ms
+        prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        resizeCanvas();
+        // Inject dedicated style tag (empty for now, but exists per spec)
+        var style = document.createElement('style');
+        style.textContent = '.line-trace-canvas{image-rendering:pixelated;}';
+        document.head.appendChild(style);
+    }
+    
+    // PANEL HANDLING AND HOVER STATE
+    function setupPanels(){
+        panels = document.querySelectorAll('.hud-panel');
+        if (!panels){ return; }
+        hoveredPanel = null;
+        panels.forEach(function(el){
+            if (!el){ return; }
+            el.addEventListener('mouseenter',function(){ hoveredPanel = el; });
+            el.addEventListener('mouseleave',function(){ if (hoveredPanel===el){ hoveredPanel = null; } });
+        });
+    }
+    
+    // RESIZE OBSERVER / EVENT
+    function setupResize(){
+        function onResize(){
+            resizeCanvas();
+        }
+        window.addEventListener('resize',onResize);
+        // Optional ResizeObserver for dynamic layout changes
+        if (window.ResizeObserver){
+            resizeObserver = new ResizeObserver(onResize);
+            resizeObserver.observe(document.body);
+        }
+    }
+    
+    function resizeCanvas(){
+        if (!canvas){ return; }
+        var width = Math.floor(window.innerWidth * dpr);
+        var height = Math.floor(window.innerHeight * dpr);
+        if (canvas.width !== width){ canvas.width = width; }
+        if (canvas.height !== height){ canvas.height = height; }
+    }
+    
+    // MAIN DRAW LOOP
+    function startLoop(){
+        function loop(timestamp){
+            drawFrame(timestamp);
+            animationId = requestAnimationFrame(loop);
+        }
+        animationId = requestAnimationFrame(loop);
+    }
+    
+    function drawFrame(timestamp){
+        if (!ctx || !globe || typeof globe.getScreenCoords!=='function'){ return; }
+        // Clear
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        // Compute role color
+        roleColor = getComputedStyle(document.documentElement).getPropertyValue('--role-color').trim() || '#FFFFFF';
+        // Zurich screen coordinates
+        var zurich = globe.getScreenCoords(47.37,8.54);
+        if (!zurich){ return; }
+        var zx = zurich.x * dpr;
+        var zy = zurich.y * dpr;
+        // Draw lines to each panel
+        panels.forEach(function(panel){
+            if (!panel){ return; }
+            var rect = panel.getBoundingClientRect();
+            var cx = (rect.left + rect.width/2) * dpr;
+            var cy = (rect.top + rect.height/2) * dpr;
+            var isHover = (panel===hoveredPanel);
+            var lineWidth = isHover ? 2.5 * dpr : 1 * dpr;
+            var shadowBlur = isHover ? 16 * dpr : 6 * dpr;
+            var alpha = isHover ? 1 : (hoveredPanel ? 0.35 : 1);
+            ctx.beginPath();
+            ctx.moveTo(zx,zy);
+            ctx.lineTo(cx,cy);
+            ctx.lineWidth = lineWidth;
+            ctx.strokeStyle = roleColor;
+            ctx.globalAlpha = alpha;
+            ctx.shadowColor = roleColor;
+            ctx.shadowBlur = shadowBlur;
+            ctx.stroke();
+        });
+        // Draw pulsating Zurich point
+        var radius = baseRadius;
+        if (!prefersReduced){
+            radius += Math.sin(timestamp * pulsateFreq) * pulsateAmp;
+        }
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.arc(zx,zy,radius,0,Math.PI*2);
+        ctx.fillStyle = roleColor;
+        ctx.fill();
+    }
+    
+    // START
+    init();
+})();
+
+    </script>
+    <script>
+/* === ELITE LAYER: 30-telemetry-live.js (Cerebras gpt-oss-120b · IA gratis) === */
+(function(){
+    //--- VARIABLES ---
+    var doc=document;
+    var win=window;
+    var root=doc.documentElement;
+    var styleEl;
+    var panels;
+    var numericElems=[];
+    var readoutEl;
+    var requestId;
+    var lastUpdate=0;
+    var updateInterval=1000/12; // ~12fps
+    var baseAmplitude=0.015; // 1.5%
+    var baseSpeed=0.6; // rad/s
+    var currentSeek=1;
+    var seekLabel='liquidity';
+    var prefersReducedMotion=win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var roleColor;
+    var initAttempts=0;
+    //--- HELPERS ---
+    function getUrlParam(name){
+        var s=win.location.search.substring(1).split('&');
+        for(var i=0;i<s.length;i++){
+            var p=s[i].split('=');
+            if(decodeURIComponent(p[0])===name)return decodeURIComponent(p[1]||'');
+        }
+        return null;
+    }
+    function createStyle(){
+        styleEl=doc.createElement('style');
+        styleEl.type='text/css';
+        styleEl.appendChild(doc.createTextNode(
+            '.pfx-readout{' +
+            'position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%);' +
+            'background:rgba(5,6,10,0.85); color:#00F2FF; padding:0.4rem 0.8rem;' +
+            'border-radius:0.3rem; font-family:monospace; font-size:0.9rem;' +
+            'z-index:9999; pointer-events:none;' +
+            'border:1px solid var(--role-color);' +
+            '}' +
+            '@media (prefers-reduced-motion: reduce){' +
+            '.pfx-readout{transition:none;}' +
+            '}'
+        ));
+        doc.head.appendChild(styleEl);
+    }
+    function createReadout(){
+        readoutEl=doc.createElement('div');
+        readoutEl.className='pfx-readout';
+        readoutEl.textContent='SEEK: '+seekLabel+' ▲';
+        doc.body.appendChild(readoutEl);
+    }
+    function updateReadout(){
+        if(!readoutEl)return;
+        readoutEl.innerHTML='SEEK: '+seekLabel+' <span style="color:'+roleColor+';">▲</span>';
+    }
+    function parseNumericNode(node){
+        var txt=node.textContent.trim();
+        var match=txt.match(/^([\d.,]+)\s*([%kVkm\/h]*)$/i);
+        if(!match)return null;
+        var value=parseFloat(match[1].replace(/,/g,''));
+        var unit=match[2]||'';
+        return {value:value,unit:unit};
+    }
+    function collectNumericElements(){
+        panels=doc.querySelectorAll('.hud-panel');
+        for(var i=0;i<panels.length;i++){
+            var panel=panels[i];
+            var walker=doc.createTreeWalker(panel,NodeFilter.SHOW_TEXT,null,false);
+            var node;
+            while(node=walker.nextNode()){
+                var parsed=parseNumericNode(node);
+                if(parsed){
+                    var span=doc.createElement('span');
+                    span.textContent=node.textContent;
+                    node.parentNode.replaceChild(span,node);
+                    numericElems.push({
+                        el:span,
+                        base:parsed.value,
+                        unit:parsed.unit,
+                        seed:Math.random()*1000,
+                        start:win.performance.now(),
+                        appeared:false
+                    });
+                }
+            }
+        }
+    }
+    function animate(){
+        var now=win.performance.now();
+        if(now-lastUpdate>=updateInterval){
+            lastUpdate=now;
+            for(var i=0;i<numericElems.length;i++){
+                var o=numericElems[i];
+                var elapsed=(now - o.start)/1000;
+                var progress=Math.min(elapsed/1.5,1); // count-up 1.5s
+                var target=o.base;
+                var display;
+                if(progress<1){
+                    display=target*progress;
+                }else{
+                    var amp=baseAmplitude*target;
+                    if(prefersReducedMotion)amp*=0.2;
+                    amp*=1+currentSeek*0.1;
+                    var speed=baseSpeed;
+                    if(prefersReducedMotion)speed*=0.3;
+                    speed*=1+currentSeek*0.15;
+                    var jitter=Math.sin(elapsed*speed+o.seed)*amp;
+                    display=target + jitter;
+                }
+                var txt=display.toFixed(2);
+                if(o.unit)txt+=' '+o.unit;
+                o.el.textContent=txt;
+            }
+        }
+        requestId=win.requestAnimationFrame(animate);
+    }
+    function energyOf(seek){
+        return seek==='capital'?1.6:(seek==='liquidity'?1.0:(seek==='trust'?0.7:0.6));
+    }
+    function applyState(st){
+        if(!st || !st.seek) return;
+        seekLabel = st.seek;
+        currentSeek = energyOf(st.seek);   // string -> energía numérica para la fluctuación
+        updateReadout();
+    }
+    function subscribeState(){
+        if(win.PFXState && typeof win.PFXState.get === 'function') applyState(win.PFXState.get());
+        win.addEventListener('pfx:state', function(e){ if(e && e.detail) applyState(e.detail); });
+    }
+    function init(){
+        // Guard for DOM ready
+        if(doc.readyState!=='complete' && doc.readyState!=='interactive'){
+            doc.addEventListener('DOMContentLoaded',init);
+            return;
+        }
+        // Guard for globe readiness
+        if(!win.globe || typeof win.globe.getScreenCoords!=='function'){
+            if(initAttempts<20){
+                initAttempts++;
+                win.requestAnimationFrame(init);
+                return;
+            }
+        }
+        // Guard for CSS var
+        roleColor=getComputedStyle(root).getPropertyValue('--role-color').trim()||'#FFD600';
+        createStyle();
+        createReadout();
+        collectNumericElements();
+        subscribeState();
+        animate();
+    }
+    //--- START ---
+    init();
+})();
+
+    </script>
+    <script>
+/* === ELITE LAYER: 40-cinematic.js (Cerebras gpt-oss-120b · IA gratis) === */
+(function(){var styleEl=document.createElement('style');var scanEl=null;var panels=null;var prefersReduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;function addStyles(){var css=`\
+.pfx-scan{position:absolute;left:-2px;top:0;width:2px;height:100vh;background:#ff3333;filter:blur(0.5px) drop-shadow(0 0 2px #ff3333);pointer-events:none;z-index:9999;}`;styleEl.type='text/css';styleEl.appendChild(document.createTextNode(css));document.head.appendChild(styleEl);}function waitForGlobe(cb){if(window.globe&&typeof globe.getScreenCoords==='function'){cb();}else{requestAnimationFrame(function(){waitForGlobe(cb);});}}function waitForPanels(cb){if(document.querySelectorAll('.hud-panel').length){cb();}else{requestAnimationFrame(function(){waitForPanels(cb);});}}function createScan(){scanEl=document.createElement('div');scanEl.className='pfx-scan';document.body.appendChild(scanEl);var keyframes=[{transform:'translateX(0%)'},{transform:'translateX(110%)'}];scanEl.animate(keyframes,{duration:2000,easing:'linear',fill:'forwards'});setTimeout(function(){if(scanEl&&scanEl.parentNode){scanEl.parentNode.removeChild(scanEl);}},2100);}function animatePanels(){panels=Array.prototype.slice.call(document.querySelectorAll('.hud-panel'));panels.forEach(function(p,i){var rect=p.getBoundingClientRect();var fromX=rect.left+rect.width/2<window.innerWidth/2?-120:120;var keyframes=[{transform:'translateX('+fromX+'px)',opacity:0},{transform:'translateX(0)',opacity:1}];p.animate(keyframes,{duration:900,delay:i*80,easing:'cubic-bezier(0.22,1,0.36,1)',fill:'forwards'});});}function lockGlobe(){var lockEl=document.createElement('div');lockEl.style.position='absolute';lockEl.style.top='0';lockEl.style.left='0';lockEl.style.width='100%';lockEl.style.height='100%';lockEl.style.pointerEvents='none';lockEl.style.zIndex='9998';document.body.appendChild(lockEl);var glitchKeyframes=[{transform:'translateX(0)',clipPath:'inset(0)'},{transform:'translateX(3px)',clipPath:'inset(0)'}];lockEl.animate(glitchKeyframes,{duration:80,easing:'ease-out',fill:'forwards'});var glowKeyframes=[{boxShadow:'0 0 0 var(--role-color)'},{boxShadow:'0 0 12px var(--role-color)'}];lockEl.animate(glowKeyframes,{duration:120,delay:80,easing:'cubic-bezier(0.34,1.56,0.64,1)',fill:'forwards'});setTimeout(function(){if(lockEl.parentNode){lockEl.parentNode.removeChild(lockEl);}},300);}function skipAnimations(){panels=Array.prototype.slice.call(document.querySelectorAll('.hud-panel'));panels.forEach(function(p){p.style.transform='none';p.style.opacity='1';});}function play(){if(prefersReduced){if(!panels){panels=Array.prototype.slice.call(document.querySelectorAll('.hud-panel'));}skipAnimations();return;}createScan();animatePanels();setTimeout(lockGlobe,2000+300);}window.PFXCinematic={play:play};function init(){if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){init();});return;}addStyles();waitForGlobe(function(){waitForPanels(function(){if(!window.PFXSeal){setTimeout(play,200);}});});} init();})();
+
+    </script>
+    <script>
+/* === ELITE LAYER: 50-hermetic-seal.js (Cerebras gpt-oss-120b · IA gratis) === */
+(function(){
+    var overlay, seal, calibrateText, activateBtn, reducedMotion, start, style, init;
+    reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    style = document.createElement('style');
+    style.textContent = "\n    #pfx-seal-overlay{position:fixed;inset:0;background:#05060a;opacity:0;display:flex;align-items:center;justify-content:center;z-index:2147483647;pointer-events:none;}\n    #pfx-seal-overlay.show{pointer-events:auto;}\n    .pfx-seal{transform:scale(0);display:flex;flex-direction:column;align-items:center;justify-content:center;}\n    .pfx-ring{width:200px;height:200px;animation:rotate 6s linear infinite;}\n    @keyframes rotate{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}\n    .pfx-arc-text{font-family:mono,monospace;color:#00F2FF;margin-top:10px;}\n    .pfx-calibrate{margin-top:20px;color:var(--role-color);font-family:mono,monospace;opacity:0;}\n    .pfx-activate{margin-top:20px;padding:10px 20px;background:#00FF94;color:#05060a;border:none;border-radius:4px;font-family:mono,monospace;cursor:pointer;opacity:0;transform:scale(0);}\n    @media (prefers-reduced-motion: reduce){.pfx-ring{animation:none;}}\n";
+    document.head.appendChild(style);
+    start = function(){
+        if(!window.globe || typeof globe.getScreenCoords!=='function'){
+            requestAnimationFrame(start);
+            return;
+        }
+        overlay = document.createElement('div');
+        overlay.id = 'pfx-seal-overlay';
+        document.body.appendChild(overlay);
+        seal = document.createElement('div');
+        seal.className = 'pfx-seal';
+        overlay.appendChild(seal);
+        var svgNS = 'http://www.w3.org/2000/svg';
+        var svg = document.createElementNS(svgNS,'svg');
+        svg.setAttribute('class','pfx-ring');
+        svg.setAttribute('viewBox','0 0 100 100');
+        var circle = document.createElementNS(svgNS,'circle');
+        circle.setAttribute('cx','50');
+        circle.setAttribute('cy','50');
+        circle.setAttribute('r','45');
+        circle.setAttribute('stroke','#00F2FF');
+        circle.setAttribute('stroke-width','5');
+        circle.setAttribute('fill','none');
+        svg.appendChild(circle);
+        seal.appendChild(svg);
+        var arcText = document.createElement('div');
+        arcText.className = 'pfx-arc-text';
+        arcText.textContent = 'PROFIX // SECURED';
+        seal.appendChild(arcText);
+        calibrateText = document.createElement('div');
+        calibrateText.className = 'pfx-calibrate';
+        calibrateText.textContent = 'CALIBRATING HUMAN SIGNATURE … 0%';
+        seal.appendChild(calibrateText);
+        activateBtn = document.createElement('button');
+        activateBtn.className = 'pfx-activate';
+        activateBtn.textContent = 'ACTIVATE CONSOLE';
+        seal.appendChild(activateBtn);
+        overlay.style.opacity = '1';
+        var sealAnim = seal.animate([{transform:'scale(0)'},{transform:'scale(1)'}],{
+            duration:300,
+            easing:'cubic-bezier(0.34,1.56,0.64,1)',
+            fill:'forwards'
+        });
+        sealAnim.onfinish = function(){
+            if(reducedMotion){
+                calibrateText.style.opacity = '1';
+                calibrateText.textContent = 'CALIBRATING HUMAN SIGNATURE … 100%';
+                calibrateText.style.color = '#FF00FF';
+                showActivate();
+            }else{
+                startCalibration();
+            }
+        };
+        overlay.addEventListener('click',function(e){
+            if(e.target!==activateBtn && e.target!==overlay)return;
+            deactivate();
+        });
+        document.addEventListener('keydown',function(e){
+            if(e.key==='Enter')deactivate();
+        });
+        window.PFXSeal = {activate:deactivate};
+        function startCalibration(){
+            calibrateText.style.opacity = '1';
+            var startTime = performance.now();
+            var duration = 2500;
+            function step(ts){
+                var elapsed = ts - startTime;
+                var prog = Math.min(elapsed/duration,1);
+                var percent = Math.round(prog*100);
+                calibrateText.textContent = 'CALIBRATING HUMAN SIGNATURE … '+percent+'%';
+                var c1 = [0,242,255];
+                var c2 = [255,0,255];
+                var c = c1.map(function(v,i){return Math.round(v+(c2[i]-v)*prog);});
+                calibrateText.style.color = 'rgb('+c.join(',')+')';
+                if(prog<1) requestAnimationFrame(step);
+                else showActivate();
+            }
+            requestAnimationFrame(step);
+        }
+        function showActivate(){
+            activateBtn.style.opacity = '1';
+            activateBtn.animate([{transform:'scale(0)'},{transform:'scale(1)'}],{
+                duration:300,
+                easing:'cubic-bezier(0.34,1.56,0.64,1)',
+                fill:'forwards'
+            });
+        }
+        function deactivate(){
+            if(overlay.dataset.removing)return;
+            overlay.dataset.removing = '1';
+            var outAnim = overlay.animate([{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(0.9)'}],{
+                duration:600,
+                easing:'cubic-bezier(0.22,1,0.36,1)',
+                fill:'forwards'
+            });
+            outAnim.onfinish = function(){
+                overlay.remove();
+                if(window.PFXCinematic && typeof window.PFXCinematic.play==='function'){
+                    window.PFXCinematic.play();
+                }
+            };
+        }
+    };
+    (function init(){
+        if(document.readyState==='loading'){
+            document.addEventListener('DOMContentLoaded',start);
+        }else{
+            start();
+        }
+    })();
+})();
+
+    </script>
+    <script>
+/* === ELITE LAYER: 60-bridge.js (Cerebras gpt-oss-120b · IA gratis) === */
+(function(){
+  // Puente zero-entropy: PFXState (única fuente de verdad) -> vistas (ProFixTelemetry = color/rol).
+  // Cuando el estado cambia, reconfigura el HUD adaptativo; line-tracing y glow leen --role-color solos.
+  function sync(st){
+    if(!st) return;
+    if(window.ProFixTelemetry && typeof window.ProFixTelemetry.setRole === 'function'){
+      try { window.ProFixTelemetry.setRole(st.role); } catch(e){}
+    }
+  }
+  function start(){
+    if(!window.PFXState || typeof window.PFXState.get !== 'function'){
+      requestAnimationFrame(start);
+      return;
+    }
+    sync(window.PFXState.get());
+    window.addEventListener('pfx:state', function(e){ if(e && e.detail) sync(e.detail); });
+  }
+  start();
 })();
 
     </script>
